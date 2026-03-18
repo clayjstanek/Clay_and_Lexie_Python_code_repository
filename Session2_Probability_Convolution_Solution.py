@@ -37,6 +37,7 @@ def triangle_pdf(z: np.ndarray) -> np.ndarray:
 
 def make_discrete_uniform(dx: float = 0.002):
     """\"\"\"Discrete grid + discrete uniform PDF on [-0.5,0.5].\"\"\n"""
+    #Create an array unif(x) that approximates the PDF: unif = 1 on [-0.5,0.5], 0 outside
     x = np.arange(-0.5, 0.5 + dx, dx)  # include endpoint
     unif = np.ones_like(x, dtype=float)  # constant on the interval
     # Normalize so integral ~ 1: sum(unif)*dx should be 1.
@@ -109,10 +110,12 @@ def main():
     plot_hist_with_curve(S2, z, tri, "A3: Monte Carlo S2 vs analytic triangle PDF")
 
     # ---------------- Part A4 + Part B ----------------
+    #Create a grid x from -0.5 to 0.5 with step size dx (e.g., dx=0.001 or dx=0.002).
     dx = 0.002
     x_u, unif = make_discrete_uniform(dx=dx)
 
     # Convolve uniform with itself -> triangle (discrete)
+    #Use numpy.convolve to compute tri = unif * unif (discrete convolution).
     tri_disc = convolve_pdf(unif, unif, dx)
     x_tri = convolved_support(x_u, x_u, dx)
 
