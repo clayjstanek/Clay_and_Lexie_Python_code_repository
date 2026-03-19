@@ -131,7 +131,7 @@ plot_hist_with_curve(S4, x_four, four_disc, "Part B: Monte Carlo S4 vs discrete 
 N2 = 100000
 S8 = np.zeros(N2, dtype=float)
 for _ in range(8):
-    S8 += U(N)
+    S8 += U(N2)
 eight_disc = convolve_pdf(four_disc, four_disc, dx)
 x_eight = convolved_support(x_four, x_four, dx)
 plot_hist_with_curve(S8, x_eight, eight_disc, "Monte Carlo S8 vs discrete convolution theory")
