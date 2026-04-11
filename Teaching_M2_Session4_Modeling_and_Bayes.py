@@ -44,6 +44,7 @@ def best_fit_line_demo():
     beta_hat, residuals, rank, s = np.linalg.lstsq(A, y, rcond=None)
     m_hat = beta_hat[0, 0]
     b_hat = beta_hat[1, 0]
+    m_and_b = np.linalg.inv(A.T@A)@A.T@y
 
     print(f"True slope = {m_true:.3f}, estimated slope = {m_hat:.3f}")
     print(f"True intercept = {b_true:.3f}, estimated intercept = {b_hat:.3f}")
