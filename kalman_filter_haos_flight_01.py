@@ -28,14 +28,14 @@ BASE_DIR = Path(__file__).resolve().parent
 
 @dataclass(frozen=True)
 class Config:
-    csv_file: str = "HAOS_Flight_01.csv"  # Relative to this script, or absolute.
+    csv_file: str = "HAOS_Flight_403.csv"  # Relative to this script, or absolute.
     output_directory: str = "haos_kalman_output"
     segment_id: str | None = None  # None processes all; or "HAOS_Flight_01_seg00".
     measure_velocity: bool = True
-    position_noise_std_m: float = 5.0  # Illustrative tuning parameter.
+    position_noise_std_m: float = 5.0  # Illustrative tuning parameter.[5,10,12,15,35]
     velocity_noise_std_mps: float = 1.0  # Illustrative tuning parameter.
     initial_velocity_std_mps: float = 20.0  # Position-only initialization.
-    model_acceleration_std_g: float = 0.10
+    model_acceleration_std_g: float = 0.60 # [.01, .03, .06, .09, 1.2, 1.5]
     show_figures: bool = True
     trajectory_figure: str = "haos_01_cartesian_trajectory.png"
     speed_figure: str = "haos_02_speed_response.png"
@@ -136,7 +136,7 @@ def run_kalman_filter(
     return estimates, covariances, innovations, nis
 
 
-def plot_results(config, segment, time_s, observations, estimates, covariances, nis):
+def plot_results(config, segment, time_s, observations, estimates, covariances, nis, acc_noise, pos_noise):
     """Four original diagnostic types, with real-data labels and all three axes."""
     output = Path(config.output_directory).expanduser()
     if not output.is_absolute():
@@ -145,7 +145,7 @@ def plot_results(config, segment, time_s, observations, estimates, covariances, 
     safe_segment = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(segment))
 
     def save(fig, name):
-        path = output / f"{safe_segment}_{name}"
+        path = output / f"{safe_segment}_{name}_{acc_noise}_{pos_noise}.jpg"
         fig.savefig(path, dpi=180)
         print(f"  Saved {path}")
         if not config.show_figures:
@@ -157,9 +157,10 @@ def plot_results(config, segment, time_s, observations, estimates, covariances, 
     ax.plot(*estimates[:, :3].T, color="#1f77b4", label="Kalman estimate")
     ax.scatter(*observations[0, :3], marker="*", s=100, color="green", label="Start")
     ax.set(xlabel="East (m)", ylabel="North (m)", zlabel="Up (m)",
+#           title=f"Six-state Kalman filter: {segment} Acc Noise: {acc_noise}, Pos Noise: {pos_noise}")
            title=f"Six-state Kalman filter: {segment}")
     ax.legend()
-    save(fig, config.trajectory_figure)
+#    save(fig, config.trajectory_figure)
 
     fig, ax = plt.subplots(figsize=(11, 6.5), constrained_layout=True)
     ax.plot(time_s, np.linalg.norm(observations[:, 3:], axis=1),
@@ -200,6 +201,8 @@ def plot_results(config, segment, time_s, observations, estimates, covariances, 
 
 def main() -> None:
     config = Config()
+    noise_data1 = [.01, .05, .1, .5, 1, 5, 10]
+    noise_data2= [.01, .05, .1, .5, 1, 5, 100]
     for name in ("position_noise_std_m", "velocity_noise_std_mps",
                  "initial_velocity_std_mps", "model_acceleration_std_g"):
         value = getattr(config, name)
@@ -208,24 +211,30 @@ def main() -> None:
     df = load_flight_data(config)
     print("3-D HAOS Kalman filter: CSV measurements, no synthetic noise")
     print("R uncertainties are illustrative; residuals are not truth errors.")
+
     for segment, group in df.groupby("segment_id", sort=False):
-        time_s = group.elapsed_s.to_numpy(dtype=float)
-        time_s = time_s - time_s[0]
-        if len(time_s) < 2 or np.any(np.diff(time_s) <= 0):
-            raise ValueError(f"{segment}: need at least two strictly increasing times")
-        observations = group[["x_east_m", "y_north_m", "z_up_m",
-                              "vx_mps", "vy_mps", "vz_mps"]].to_numpy(dtype=float)
-        measurements = observations if config.measure_velocity else observations[:, :3]
-        f, _g, _qa, q, h, r = make_filter_matrices(config, time_s[1] - time_s[0])
-        estimates, covariances, _innovations, nis = run_kalman_filter(
-            config, measurements, f, q, h, r, time_s)
-        print(f"\n{segment}: {len(time_s)} samples; {time_s[-1]:.1f} seconds")
-        print("Position residual RMS [E,N,U] (m):",
-              np.sqrt(np.mean((estimates[:, :3] - observations[:, :3])**2, axis=0)))
-        print(f"Mean NIS after initialization: {np.nanmean(nis):.3f}")
-        plot_results(config, segment, time_s, observations, estimates, covariances, nis)
-    if config.show_figures:
-        plt.show()
+        for ii  in (noise_data1):
+            for jj in (noise_data2):
+
+                time_s = group.elapsed_s.to_numpy(dtype=float)
+                time_s = time_s - time_s[0]
+                if len(time_s) < 2 or np.any(np.diff(time_s) <= 0):
+                    raise ValueError(f"{segment}: need at least two strictly increasing times")
+                observations = group[["x_east_m", "y_north_m", "z_up_m",
+                                      "vx_mps", "vy_mps", "vz_mps"]].to_numpy(dtype=float)
+                measurements = observations if config.measure_velocity else observations[:, :3]
+                f, _g, _qa, q, h, r = make_filter_matrices(config, time_s[1] - time_s[0])
+                estimates, covariances, _innovations, nis = run_kalman_filter(
+                    config, measurements, f, q, h, r, time_s)
+                print(f"\n{segment}: {len(time_s)} samples; {time_s[-1]:.1f} seconds")
+#                noise_data1 = [.01, .05, .1, .5, 1, 5, 10]
+#                noise_data2= [.01, .05, .1, .5, 1, 5, 10]
+                print("Position residual RMS [E,N,U] (m):",
+                      np.sqrt(np.mean((estimates[:, :3] - observations[:, :3])**2, axis=0)))
+                print(f"Mean NIS after initialization: {np.nanmean(nis):.3f}")
+                plot_results(config, segment, time_s, observations, estimates, covariances, nis, ii, jj)
+            if config.show_figures:
+                plt.show()
 
 
 if __name__ == "__main__":
